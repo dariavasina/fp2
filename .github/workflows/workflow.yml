@@ -33,7 +33,7 @@ jobs:
           ocaml-compiler: ${{ matrix.ocaml-compiler }}
 
       # - run: opam install . --deps-only --with-test
-      - run: opam install base stdio alcotest qcheck-alcotest dune -y
+      - run: opam install base stdio alcotest qcheck qcheck-alcotest dune -y
 
       - run: opam exec -- dune build
       - run: opam exec -- dune runtest --verbose

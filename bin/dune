@@ -1,0 +1,4 @@
+(executable
+ (public_name fp2)
+ (name main)
+ (libraries fp2 base stdio prebag))

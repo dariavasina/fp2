@@ -85,6 +85,15 @@ module MakeTrie (S : Stringable) = struct
         children
     in
     aux [] trie empty
+
+  let to_list (trie : trie) : (S.t * int) list =
+    let rec aux prefix (Node (count, children)) acc =
+      let element = S.of_string (List.fold_left (fun acc c -> acc ^ String.make 1 c) "" prefix) in
+      let acc = if count > 0 then (element, count) :: acc else acc in
+      List.fold_left (fun acc (c, child) -> aux (prefix @ [c]) child acc) acc children
+    in
+    aux [] trie []
+      
 end
 
 module Prebag (S : Stringable) = MakeTrie(S)

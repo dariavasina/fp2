@@ -24,5 +24,7 @@ module type Stringable = sig
 
   
     val filter : (elem -> int -> bool) -> trie -> trie
+
+    val to_list : trie -> (elem * int) list
   end
   

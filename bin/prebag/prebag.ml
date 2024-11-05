@@ -54,7 +54,34 @@ module MakeTrie (S : Stringable) = struct
 
   let contains (elem : S.t) (trie : trie) : bool =
     count elem trie > 0
+  let union (trie1 : trie) (trie2 : trie) : trie =
+    let rec aux (Node (count1, children1)) (Node (count2, children2)) =
+      let merged_count = count1 + count2 in
+      let merged_children =
+        List.fold_left
+          (fun acc (c, child2) ->
+              match List.partition (fun (ch, _) -> ch = c) acc with
+              | ([], others) -> (c, child2) :: others
+              | ((_, child1) :: _, others) -> (c, aux child1 child2) :: others)
+          children1
+          children2
+      in
+      Node (merged_count, merged_children)
+    in
+    aux trie1 trie2
 
+  let equal (trie1 : trie) (trie2 : trie) : bool =
+    let rec aux (Node (count1, children1)) (Node (count2, children2)) =
+      count1 = count2 &&
+      List.length children1 = List.length children2 &&
+      List.for_all
+        (fun (c1, child1) ->
+          match List.find_opt (fun (c2, _) -> c1 = c2) children2 with
+          | Some (_, child2) -> aux child1 child2
+          | None -> false)
+        children1
+    in
+    aux trie1 trie2
   let map (f : S.t -> S.t) (trie : trie) : trie =
     let rec aux prefix (Node (count, children)) acc =
       let element = S.of_string (List.fold_left (fun acc c -> acc ^ String.make 1 c) "" prefix) in
@@ -86,13 +113,13 @@ module MakeTrie (S : Stringable) = struct
     in
     aux [] trie empty
 
-  let to_list (trie : trie) : (S.t * int) list =
-    let rec aux prefix (Node (count, children)) acc =
-      let element = S.of_string (List.fold_left (fun acc c -> acc ^ String.make 1 c) "" prefix) in
-      let acc = if count > 0 then (element, count) :: acc else acc in
-      List.fold_left (fun acc (c, child) -> aux (prefix @ [c]) child acc) acc children
-    in
-    aux [] trie []
+    let to_list (trie : trie) : (S.t * int) list =
+      let rec aux prefix (Node (count, children)) acc =
+        let element = S.of_string (List.fold_left (fun acc c -> acc ^ String.make 1 c) "" prefix) in
+        let acc = if count > 0 then (element, count) :: acc else acc in
+        List.fold_left (fun acc (c, child) -> aux (prefix @ [c]) child acc) acc children
+      in
+      aux [] trie []
       
 end
 

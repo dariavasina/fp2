@@ -1,4 +1,4 @@
-open Alcotest
+(* open Alcotest *)
 open QCheck
 open Prebag
 
@@ -23,7 +23,6 @@ let map_to_list map =
     (key, count) :: acc
   ) map []
   
-
 
 module StringBag = MakeTrie (struct
   type t = string
@@ -72,38 +71,6 @@ let test_count_int =
       let trie = IntBag.add 123 trie in
       Alcotest.check Alcotest.int "Count of 123" 1 (IntBag.count 123 trie)
     )
-
-let test_add_string =
-  test_case "Trie add" `Quick (fun () ->
-      let trie = StringBag.empty in
-      let trie = StringBag.add "hello" trie in
-      let trie = StringBag.add "world" trie in
-
-      let standard_bag = StandardStringMultiset.empty in
-      let standard_bag = add_to_map "hello" standard_bag in
-      let standard_bag = add_to_map "world" standard_bag in
-
-      check Alcotest.int "Count of 'hello' in standard multiset" 
-        1 (Option.value ~default:0 (StandardStringMultiset.find_opt "hello" standard_bag));
-      check Alcotest.int "Count of 'world' in standard multiset" 
-        1 (Option.value ~default:0 (StandardStringMultiset.find_opt "world" standard_bag));
-      check Alcotest.int "Count of 'ocaml' in trie" 
-        0 (StringBag.count "ocaml" trie);
-      check Alcotest.int "Count of 'ocaml' in standard multiset" 
-        0 (Option.value ~default:0 (StandardStringMultiset.find_opt "ocaml" standard_bag))
-    )  
-  
-let test_remove_string =
-  test_case "Trie remove" `Quick (fun () ->
-      let trie = StringBag.add "hello" StringBag.empty in
-      let trie = StringBag.add "world" trie in
-      let trie_opt = StringBag.remove "hello" trie in
-      match trie_opt with
-      | None -> fail "Trie should not be None"
-      | Some trie ->
-        check Alcotest.int "Count of 'hello'" 0 (StringBag.count "hello" trie);
-        check Alcotest.int "Count of 'world'" 1 (StringBag.count "world" trie)
-    )  
   
 let arb_string_trie =
   let rec gen_tree n =
@@ -124,25 +91,6 @@ let gen_string =
   let gen_char = oneofl (String.to_seq charset |> List.of_seq) in
   string_size ~gen:gen_char (int_range 1 100)
 
-
-
-(* let arb_operations =
-  let open Gen in
-  let gen_op = oneof [
-    map (fun s -> `Insert s) string;
-    map (fun s -> `Remove s) string;
-  ] in
-  let rec gen_ops n = 
-    if n <= 0 then return [] 
-    else map2 (fun op ops -> op :: ops) gen_op (gen_ops (n - 1))
-  in
-  make
-    ~print:(fun ops -> 
-      Print.(list string) (List.map (function 
-        | `Insert x -> "Insert " ^ x 
-        | `Remove x -> "Remove " ^ x) ops))
-    (gen_ops 10) *)
-
 let arb_operations =
   let open Gen in
   list_size (int_range 1 10) (oneof [
@@ -162,28 +110,21 @@ let apply_operations ops bag map =
   in
   aux ops bag map
 
-(* let test_operations_property =
-  QCheck.Test.make
-    ~name:"operations produce same result as built-in multiset"
-    arb_operations
-    (fun ops ->
-      let prebag, stringbag = apply_operations ops StringBag.empty StandardStringMultiset.empty in
-      StringBag.to_list prebag = map_to_list stringbag) *)
+
 
 let compare_pairs (s1, n1) (s2, n2) =
   let c = String.compare s1 s2 in
   if c = 0 then Int.compare n1 n2 else c
 
 
-  let is_valid_string s =
-    String.for_all (fun c -> String.contains charset c) s
+let is_valid_string s =
+  String.for_all (fun c -> String.contains charset c) s
   
 let test_operations_property =
   QCheck.Test.make
     ~name:"operations produce same result as built-in multiset"
     (make arb_operations)
     (fun ops ->
-      (* Validate operations *)
       let valid_ops = List.for_all (function
         | `Insert s | `Remove s -> is_valid_string s
       ) ops in
@@ -193,21 +134,8 @@ let test_operations_property =
       else
         let prebag, stringbag = apply_operations ops StringBag.empty StandardStringMultiset.empty in
         let sorted_prebag = List.sort compare_pairs (StringBag.to_list prebag) in 
-        let sorted_stringbag = List.sort compare_pairs (map_to_list stringbag) in
-        
-        (* Debug print statements *)
-        Printf.printf "Operations: %s\n" 
-          (String.concat ", " (List.map (function 
-            | `Insert x -> "Insert " ^ x 
-            | `Remove x -> "Remove " ^ x) ops));
-        Printf.printf "StringBag: %s\n" 
-          (String.concat ", " (List.map (fun (s, n) -> Printf.sprintf "(%s, %d)" s n) sorted_prebag));
-        Printf.printf "StandardStringMultiset: %s\n" 
-          (String.concat ", " (List.map (fun (s, n) -> Printf.sprintf "(%s, %d)" s n) sorted_stringbag));
-        
+        let sorted_stringbag = List.sort compare_pairs (map_to_list stringbag) in    
         sorted_prebag = sorted_stringbag)
-
-
 
 let prop_identity =
   QCheck.Test.make
@@ -219,33 +147,29 @@ let prop_identity =
        | None -> initial_count = 0 
        | Some result -> StringBag.count elem result = initial_count)
 
-
 let prop_associativity =
-  Test.make
-    ~name:"associativity of add"
-    (triple string string arb_string_trie)
-    (fun (elem1, elem2, trie) ->
-       let trie1 = StringBag.add elem2 (StringBag.add elem1 trie) in
-       let trie2 = StringBag.add elem1 (StringBag.add elem2 trie) in
-       StringBag.count elem1 trie1 = StringBag.count elem1 trie2 &&
-       StringBag.count elem2 trie1 = StringBag.count elem2 trie2)
-
+  QCheck.Test.make
+    ~name:"associativity of union"
+    (QCheck.triple arb_string_trie arb_string_trie arb_string_trie)
+    (fun (trie1, trie2, trie3) ->
+        let union1 = StringBag.union (StringBag.union trie1 trie2) trie3 in
+        let union2 = StringBag.union trie1 (StringBag.union trie2 trie3) in
+        StringBag.equal union1 union2)
 let prop_monoid_identity =
   Test.make
     ~name:"monoid identity"
     arb_string_trie
     (fun trie ->
-       let union_with_empty = trie in
-       union_with_empty = trie)
+        let empty_trie = StringBag.empty in
+        let union_with_empty = StringBag.union trie empty_trie in
+        union_with_empty = trie)
 
 
 let run_tests() =
   let open Alcotest in
   run "Trie Tests"
     [ ( "unit_tests"
-      , [ test_add_string
-        ; test_remove_string
-        ; test_add_int
+      , [ test_add_int
         ; test_remove_int
         ; test_count_int
         ] )
@@ -256,3 +180,4 @@ let run_tests() =
         ; QCheck_alcotest.to_alcotest test_operations_property
         ] )
     ]
+  

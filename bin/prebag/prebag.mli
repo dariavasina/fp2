@@ -17,6 +17,10 @@ module type Stringable = sig
     val count : elem -> trie -> int
   
     val contains : elem -> trie -> bool
+
+    val union : trie -> trie -> trie
+
+    val equal : trie -> trie -> bool
   
     val map : (elem -> elem) -> trie -> trie
   

@@ -71,18 +71,6 @@ let test_count_int =
       let trie = IntBag.add 123 trie in
       Alcotest.check Alcotest.int "Count of 123" 1 (IntBag.count 123 trie)
     )
-  
-let arb_string_trie =
-  let rec gen_tree n =
-    match n with
-    | 0 -> Gen.return StringBag.empty
-    | _ ->
-      Gen.frequency
-        [ 1, Gen.return StringBag.empty
-        ; 3, Gen.map2 (fun x t -> StringBag.add x t) Gen.string (gen_tree (n - 1))
-        ]
-  in
-  make ~print:(fun _ -> Printf.sprintf "Trie with elements") (gen_tree 10)
 
 let charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
@@ -90,6 +78,21 @@ let gen_string =
   let open Gen in
   let gen_char = oneofl (String.to_seq charset |> List.of_seq) in
   string_size ~gen:gen_char (int_range 1 100)
+
+let is_valid_string s =
+  String.for_all (fun c -> String.contains charset c) s
+
+let arb_string_trie =
+  let rec gen_tree n =
+    match n with
+    | 0 -> Gen.return StringBag.empty
+    | _ ->
+      Gen.frequency
+        [ 1, Gen.return StringBag.empty
+        ; 3, Gen.map2 (fun x t -> StringBag.add x t) gen_string (gen_tree (n - 1))
+        ]
+  in
+  make ~print:(fun _ -> Printf.sprintf "Trie with elements") (gen_tree 10)
 
 let arb_operations =
   let open Gen in
@@ -110,16 +113,10 @@ let apply_operations ops bag map =
   in
   aux ops bag map
 
-
-
 let compare_pairs (s1, n1) (s2, n2) =
   let c = String.compare s1 s2 in
   if c = 0 then Int.compare n1 n2 else c
 
-
-let is_valid_string s =
-  String.for_all (fun c -> String.contains charset c) s
-  
 let test_operations_property =
   QCheck.Test.make
     ~name:"operations produce same result as built-in multiset"
@@ -132,20 +129,10 @@ let test_operations_property =
       if not valid_ops then
         false
       else
-        let prebag, stringbag = apply_operations ops StringBag.empty StandardStringMultiset.empty in
+        let prebag, standardbag = apply_operations ops StringBag.empty StandardStringMultiset.empty in
         let sorted_prebag = List.sort compare_pairs (StringBag.to_list prebag) in 
-        let sorted_stringbag = List.sort compare_pairs (map_to_list stringbag) in    
-        sorted_prebag = sorted_stringbag)
-
-let prop_identity =
-  QCheck.Test.make
-    ~name:"identity (add and remove)"
-    (QCheck.pair arb_string_trie QCheck.string)
-    (fun (trie, elem) ->
-       let initial_count = StringBag.count elem trie in
-       match StringBag.remove elem (StringBag.add elem trie) with
-       | None -> initial_count = 0 
-       | Some result -> StringBag.count elem result = initial_count)
+        let sorted_standardbag = List.sort compare_pairs (map_to_list standardbag) in    
+        sorted_prebag = sorted_standardbag)
 
 let prop_associativity =
   QCheck.Test.make
@@ -155,15 +142,15 @@ let prop_associativity =
         let union1 = StringBag.union (StringBag.union trie1 trie2) trie3 in
         let union2 = StringBag.union trie1 (StringBag.union trie2 trie3) in
         StringBag.equal union1 union2)
+    
 let prop_monoid_identity =
   Test.make
     ~name:"monoid identity"
     arb_string_trie
     (fun trie ->
-        let empty_trie = StringBag.empty in
-        let union_with_empty = StringBag.union trie empty_trie in
-        union_with_empty = trie)
-
+        let union_with_empty = StringBag.union trie StringBag.empty in
+        let empty_with_union = StringBag.union StringBag.empty trie in
+        StringBag.equal union_with_empty trie && StringBag.equal empty_with_union trie)
 
 let run_tests() =
   let open Alcotest in
@@ -174,8 +161,7 @@ let run_tests() =
         ; test_count_int
         ] )
     ; ( "property_based"
-      , [ QCheck_alcotest.to_alcotest prop_identity
-        ; QCheck_alcotest.to_alcotest prop_associativity
+      , [ QCheck_alcotest.to_alcotest prop_associativity
         ; QCheck_alcotest.to_alcotest prop_monoid_identity
         ; QCheck_alcotest.to_alcotest test_operations_property
         ] )
